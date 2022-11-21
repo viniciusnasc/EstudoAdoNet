@@ -39,7 +39,7 @@ namespace EstudoAdoNet.Data
                 {
                     CriarDatabase(testecn).GetAwaiter();
                     await testecn.CloseAsync();
-                    //Thread.Sleep(5000);
+                    Thread.Sleep(5000);
                     return await AbrirConexaoAsync();
                 }
 
@@ -69,6 +69,65 @@ namespace EstudoAdoNet.Data
             catch (Exception ex)
             {
                 return;
+            }
+        }
+
+        public async Task<T> FindById(Guid id)
+        {
+            try
+            {
+                SqlConnection cn = await AbrirConexaoAsync();
+                SqlCommand command = new($"select * from {TableName} where id like '{id}'", cn);
+                SqlDataReader rdr = await command.ExecuteReaderAsync();
+                string json = "";
+
+                while (rdr.Read())
+                {
+                    IEnumerable<Dictionary<string, object>> objetos = SerializarDataReader(rdr);
+                    json = JsonConvert.SerializeObject(objetos.ToList()[0]);
+                }
+
+                return JsonConvert.DeserializeObject<T>(json);
+            }
+            catch (Exception ex)
+            {
+                return null;
+            }
+            finally
+            {
+                await FecharConexaoAsync();
+            }
+        }
+
+        public async Task<IEnumerable<T>> GetAll()
+        {
+            try
+            {
+                SqlConnection cn = await AbrirConexaoAsync();
+                SqlCommand command = new($"select * from {TableName}", cn);
+                SqlDataReader rdr = await command.ExecuteReaderAsync();
+                List<T> lista = new();
+
+                while (rdr.Read())
+                {
+                    IEnumerable<Dictionary<string, object>> x = SerializarDataReader(rdr);
+
+                    foreach (var ob in x)
+                    {
+                        string json = JsonConvert.SerializeObject(ob);
+                        lista.Add(JsonConvert.DeserializeObject<T>(json));
+                    }
+                }
+
+                return lista;
+            }
+            catch (Exception ex)
+            {
+                return null;
+            }
+            finally
+            {
+                await FecharConexaoAsync();
             }
         }
 
@@ -121,6 +180,29 @@ namespace EstudoAdoNet.Data
             {
                 await FecharConexaoAsync();
             }
+        }
+
+        public IEnumerable<Dictionary<string, object>> SerializarDataReader(SqlDataReader reader)
+        {
+            var results = new List<Dictionary<string, object>>();
+            var cols = new List<string>();
+            for (var i = 0; i < reader.FieldCount; i++)
+                cols.Add(reader.GetName(i));
+
+            do
+                results.Add(SerializarDados(cols, reader));
+            while (reader.Read());
+
+            return results;
+        }
+
+        private Dictionary<string, object> SerializarDados(IEnumerable<string> cols,
+                                                SqlDataReader reader)
+        {
+            var result = new Dictionary<string, object>();
+            foreach (var col in cols)
+                result.Add(col, reader[col]);
+            return result;
         }
     }
 }
